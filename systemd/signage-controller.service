@@ -1,0 +1,19 @@
+[Unit]
+Description=Signage Controller Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/signage/controller
+ExecStart=/usr/bin/node /opt/signage/controller/src/index.js
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+StandardOutput=append:/var/log/signage/controller-stdout.log
+StandardError=append:/var/log/signage/controller-stderr.log
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

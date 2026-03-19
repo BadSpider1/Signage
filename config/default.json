@@ -1,0 +1,17 @@
+{
+  "deviceId": null,
+  "wsUrl": "ws://localhost:9000",
+  "fallbackImagePath": "/opt/signage/default.jpg",
+  "passiveEndpoint": null,
+  "passivePollIntervalMs": 20000,
+  "probeTimeoutMs": 8000,
+  "freezeTimeoutMs": 6000,
+  "maxStreamRetries": 3,
+  "rendererPort": 8080,
+  "controllerWsPort": 8081,
+  "logDir": "/var/log/signage",
+  "logLevel": "info",
+  "cacheFile": "/var/lib/signage/last-stream.json",
+  "wsReconnectBaseMs": 1000,
+  "wsReconnectMaxMs": 30000
+}
