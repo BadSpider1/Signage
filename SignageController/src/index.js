@@ -3,6 +3,7 @@
 const http = require('http');
 const path = require('path');
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const config = require('./config');
 
 // Init DB first
@@ -13,8 +14,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Rate limit for uploaded static files to prevent abuse
+const uploadsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Serve uploaded files
-app.use('/uploads', express.static(path.resolve(config.uploadDir)));
+app.use('/uploads', uploadsLimiter, express.static(path.resolve(config.uploadDir)));
 
 // Serve static admin UI
 app.use(express.static(path.join(__dirname, '..', 'public')));

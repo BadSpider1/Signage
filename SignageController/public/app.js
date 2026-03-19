@@ -5,6 +5,9 @@
 // ============================================================
 let ADMIN_TOKEN = localStorage.getItem('signage_admin_token') || '';
 
+// Track event listeners for controls that get re-registered on view refresh
+const controlHandlers = new Map();
+
 function ensureToken() {
   if (!ADMIN_TOKEN) {
     const t = prompt('Enter ADMIN_TOKEN (Bearer token for API access):');
@@ -636,8 +639,10 @@ async function renderControl() {
       idSelect.innerHTML = items.map((i) => `<option value="${escHtml(i.id)}">${escHtml(i.name)}</option>`).join('');
     }
 
-    typeSelect.removeEventListener('change', typeSelect._handler || (() => {}));
-    typeSelect._handler = updateTargetSelector;
+    if (controlHandlers.has('targetType')) {
+      typeSelect.removeEventListener('change', controlHandlers.get('targetType'));
+    }
+    controlHandlers.set('targetType', updateTargetSelector);
     typeSelect.addEventListener('change', updateTargetSelector);
     updateTargetSelector();
 
@@ -651,8 +656,10 @@ async function renderControl() {
       pathGroup.style.display = cmd === 'SET_FALLBACK_IMAGE' ? '' : 'none';
     }
 
-    cmdSelect.removeEventListener('change', cmdSelect._handler || (() => {}));
-    cmdSelect._handler = updateCommandFields;
+    if (controlHandlers.has('cmdType')) {
+      cmdSelect.removeEventListener('change', controlHandlers.get('cmdType'));
+    }
+    controlHandlers.set('cmdType', updateCommandFields);
     cmdSelect.addEventListener('change', updateCommandFields);
     updateCommandFields();
   } catch (err) {

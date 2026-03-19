@@ -120,13 +120,19 @@ function handleMessage(ws, data) {
     case 'PONG':
       if (msg.deviceId) {
         deviceService.updateHeartbeat(msg.deviceId);
-      } else if (ws._deviceId) {
-        deviceService.updateHeartbeat(ws._deviceId);
+      } else {
+        updateHeartbeatForSocket(ws);
       }
       break;
 
     default:
       break;
+  }
+}
+
+function updateHeartbeatForSocket(ws) {
+  if (ws._deviceId) {
+    deviceService.updateHeartbeat(ws._deviceId);
   }
 }
 
@@ -137,9 +143,7 @@ function init(server) {
     console.log(`[Gateway] New WS connection from ${req.socket.remoteAddress}`);
 
     ws.on('pong', () => {
-      if (ws._deviceId) {
-        deviceService.updateHeartbeat(ws._deviceId);
-      }
+      updateHeartbeatForSocket(ws);
     });
 
     ws.on('message', (data) => {

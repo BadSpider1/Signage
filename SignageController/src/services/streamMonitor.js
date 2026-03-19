@@ -10,8 +10,16 @@ async function checkStream(url) {
   // Lazily import node-fetch (ESM-only package) on first use
   const { default: fetch } = await import('node-fetch');
   try {
-    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) });
-    streamStatus.set(url, { available: res.ok, lastChecked: Date.now(), error: null });
+    // Use GET with Range header to fetch only the first byte — more reliable than HEAD
+    // for HLS servers that may not implement HEAD correctly.
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+      signal: AbortSignal.timeout(10000),
+    });
+    // 200 OK or 206 Partial Content both indicate the stream endpoint is reachable
+    const available = res.ok || res.status === 206;
+    streamStatus.set(url, { available, lastChecked: Date.now(), error: null });
   } catch (err) {
     streamStatus.set(url, { available: false, lastChecked: Date.now(), error: err.message });
   }
