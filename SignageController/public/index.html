@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signage Controller</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">📺</div>
+        <span class="logo-text">Signage</span>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#" data-view="dashboard" class="nav-link active">
+          <span class="nav-icon">🏠</span> Dashboard
+        </a></li>
+        <li><a href="#" data-view="devices" class="nav-link">
+          <span class="nav-icon">📺</span> Devices
+        </a></li>
+        <li><a href="#" data-view="groups" class="nav-link">
+          <span class="nav-icon">📂</span> Groups
+        </a></li>
+        <li><a href="#" data-view="content" class="nav-link">
+          <span class="nav-icon">🎬</span> Content Library
+        </a></li>
+        <li><a href="#" data-view="control" class="nav-link">
+          <span class="nav-icon">🎮</span> Live Control
+        </a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <button id="btn-token" class="btn btn-ghost btn-sm">⚙ Token</button>
+      </div>
+    </nav>
+
+    <main class="content">
+      <div id="view-dashboard" class="view active">
+        <div class="view-header">
+          <h1>Dashboard</h1>
+          <button id="btn-refresh" class="btn btn-secondary btn-sm">↻ Refresh</button>
+        </div>
+        <div class="stats-row" id="stats-row"></div>
+        <h2 class="section-title">Devices</h2>
+        <div class="device-grid" id="device-grid"></div>
+      </div>
+
+      <div id="view-devices" class="view">
+        <div class="view-header">
+          <h1>Devices</h1>
+        </div>
+        <div class="device-list" id="device-list"></div>
+      </div>
+
+      <div id="view-groups" class="view">
+        <div class="view-header">
+          <h1>Groups</h1>
+          <button id="btn-create-group" class="btn btn-primary btn-sm">+ New Group</button>
+        </div>
+        <div class="group-list" id="group-list"></div>
+      </div>
+
+      <div id="view-content" class="view">
+        <div class="view-header">
+          <h1>Content Library</h1>
+          <div class="btn-group">
+            <button id="btn-add-stream" class="btn btn-primary btn-sm">+ Add Stream</button>
+            <button id="btn-upload-image" class="btn btn-secondary btn-sm">↑ Upload Image</button>
+          </div>
+        </div>
+        <div class="content-grid" id="content-grid"></div>
+      </div>
+
+      <div id="view-control" class="view">
+        <div class="view-header">
+          <h1>Live Control</h1>
+        </div>
+        <div class="control-panel">
+          <div class="control-section">
+            <h2>Target</h2>
+            <div class="form-group">
+              <label>Target Type</label>
+              <select id="ctrl-target-type" class="form-control">
+                <option value="all">All Devices (Broadcast)</option>
+                <option value="device">Specific Device</option>
+                <option value="group">Group</option>
+              </select>
+            </div>
+            <div class="form-group" id="ctrl-target-selector" style="display:none">
+              <label id="ctrl-target-label">Select</label>
+              <select id="ctrl-target-id" class="form-control"></select>
+            </div>
+          </div>
+          <div class="control-section">
+            <h2>Command</h2>
+            <div class="form-group">
+              <label>Command</label>
+              <select id="ctrl-command" class="form-control">
+                <option value="SET_STREAM_URL">Set Stream URL</option>
+                <option value="CLEAR_STREAM">Clear Stream</option>
+                <option value="SET_FALLBACK_IMAGE">Set Fallback Image</option>
+                <option value="RELOAD">Reload</option>
+                <option value="PING">Ping</option>
+              </select>
+            </div>
+            <div class="form-group" id="ctrl-url-group">
+              <label>Stream URL</label>
+              <input type="text" id="ctrl-url" class="form-control" placeholder="https://..." />
+            </div>
+            <div class="form-group" id="ctrl-path-group" style="display:none">
+              <label>Image Path</label>
+              <input type="text" id="ctrl-path" class="form-control" placeholder="/uploads/..." />
+            </div>
+            <button id="btn-send-command" class="btn btn-primary">Send Command</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none">
+    <div class="modal" id="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
