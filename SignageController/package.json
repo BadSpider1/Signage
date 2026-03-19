@@ -1,0 +1,20 @@
+{
+  "name": "signage-controller",
+  "version": "1.0.0",
+  "description": "Backend control plane and admin UI for digital signage",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node src/db/seed.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "multer": "^2.1.1",
+    "node-fetch": "^3.3.2",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.0"
+  }
+}
