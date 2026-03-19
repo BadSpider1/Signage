@@ -43,10 +43,12 @@ fi
 
 # Install Node.js dependencies
 echo "==> Installing controller dependencies..."
-cd "$INSTALL_DIR/controller" && npm install --omit=dev
+cd "$INSTALL_DIR/controller" || { echo "ERROR: $INSTALL_DIR/controller not found"; exit 1; }
+npm install --omit=dev
 
 echo "==> Installing renderer dependencies..."
-cd "$INSTALL_DIR/renderer" && npm install --omit=dev
+cd "$INSTALL_DIR/renderer" || { echo "ERROR: $INSTALL_DIR/renderer not found"; exit 1; }
+npm install --omit=dev
 
 # Create default fallback image placeholder if not exists
 if [[ ! -f "$INSTALL_DIR/default.jpg" ]]; then

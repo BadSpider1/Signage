@@ -124,6 +124,9 @@ wsClient.on('disconnected', () => {
   logger.warn('Central server disconnected - maintaining current state');
 });
 
+// Prevent unhandled 'error' event from crashing the process; wsClient already logs it
+wsClient.on('error', () => {});
+
 wsClient.on('SET_STREAM_URL', ({ url }) => {
   logger.info('Received SET_STREAM_URL', { url });
   if (url === currentStreamUrl && sm.getState() === StateMachine.STATES.STREAM) {
