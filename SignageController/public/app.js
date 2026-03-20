@@ -135,7 +135,19 @@ function statusBadge(online) {
 }
 
 function typeBadge(type) {
-  return `<span class="content-card-type ${type}">${type === 'stream' ? '📡 Stream' : '🖼 Image'}</span>`;
+  const labels = { stream: '📡 Stream', image: '🖼 Image', video: '🎬 Video' };
+  return `<span class="content-card-type ${type}">${labels[type] || type}</span>`;
+}
+
+function processingBadge(status) {
+  const map = {
+    queued:     { cls: 'processing-queued',     icon: '⏳', label: 'Queued' },
+    processing: { cls: 'processing-processing', icon: '⚙️', label: 'Processing…' },
+    ready:      { cls: 'processing-ready',      icon: '✅', label: 'Ready' },
+    failed:     { cls: 'processing-failed',     icon: '❌', label: 'Failed' },
+  };
+  const s = map[status] || map.ready;
+  return `<span class="processing-badge ${s.cls}">${s.icon} ${s.label}</span>`;
 }
 
 function escHtml(str) {
@@ -149,9 +161,12 @@ function escHtml(str) {
 function timeAgo(ts) {
   if (!ts) return 'never';
   const d = Math.floor((Date.now() - ts) / 1000);
-  if (d < 60) return `${d}s ago`;
-  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-  return `${Math.floor(d / 3600)}h ago`;
+  const absolute = new Date(ts).toLocaleString();
+  let relative;
+  if (d < 60) relative = `${d}s ago`;
+  else if (d < 3600) relative = `${Math.floor(d / 60)}m ago`;
+  else relative = `${Math.floor(d / 3600)}h ago`;
+  return `<span title="${absolute}">${relative}</span>`;
 }
 
 // ============================================================
@@ -516,22 +531,37 @@ document.getElementById('btn-upload-image').addEventListener('click', () => {
   `);
 });
 
+document.getElementById('btn-upload-video').addEventListener('click', () => {
+  showModal('Upload Video', `
+    <div class="form-group"><label>Name</label><input id="vid-name" class="form-control" placeholder="Video name" /></div>
+    <div class="form-group"><label>Video File</label><input type="file" id="vid-file" class="form-control" accept="video/*" /></div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:8px">
+      After upload, the video will be processed to HLS (if ffmpeg is installed) or served as MP4.
+      Processing runs in the background — status shown in the content library.
+    </p>
+  `, `
+    <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary btn-sm" onclick="uploadVideo()">Upload</button>
+  `);
+});
+
 async function renderContent() {
   const el = document.getElementById('content-grid');
   el.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const content = await GET('/content');
     if (content.length === 0) {
-      el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div><p>No content yet. Add a stream or upload an image.</p></div>`;
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div><p>No content yet. Add a stream, upload an image, or upload a video.</p></div>`;
       return;
     }
     el.innerHTML = content.map((c) => `
       <div class="content-card">
         <div class="content-card-thumb">
-          ${c.type === 'image' && c.file_path ? `<img src="${escHtml(c.file_path)}" alt="" />` : '📡'}
+          ${c.type === 'image' && c.file_path ? `<img src="${escHtml(c.file_path)}" alt="" />` : (c.type === 'video' ? '🎬' : '📡')}
         </div>
         <div class="content-card-name">${escHtml(c.name)}</div>
         ${typeBadge(c.type)}
+        ${c.type === 'video' ? processingBadge(c.processing_status || 'ready') : ''}
         <div class="content-card-url">${escHtml(c.url || c.file_path || '')}</div>
         <div class="content-card-actions">
           <button class="btn btn-sm btn-secondary" onclick="editContent('${escHtml(c.id)}')">Edit</button>
@@ -539,6 +569,11 @@ async function renderContent() {
         </div>
       </div>
     `).join('');
+    // Auto-refresh content if any video is still processing
+    const processing = content.some((c) => c.type === 'video' && c.processing_status && c.processing_status !== 'ready' && c.processing_status !== 'failed');
+    if (processing) {
+      setTimeout(() => { if (currentView === 'content') renderContent(); }, 5000);
+    }
   } catch (err) {
     el.innerHTML = '';
     toast(err.message, 'error');
@@ -580,6 +615,29 @@ async function uploadImage() {
   } catch (err) { toast(err.message, 'error'); }
 }
 
+async function uploadVideo() {
+  const nameEl = document.getElementById('vid-name');
+  const fileEl = document.getElementById('vid-file');
+  if (!fileEl.files[0]) return toast('Select a file', 'error');
+  const fd = new FormData();
+  fd.append('file', fileEl.files[0]);
+  fd.append('name', nameEl.value.trim() || fileEl.files[0].name);
+  try {
+    const res = await fetch('/api/content/upload-video', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ADMIN_TOKEN}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    toast('Video uploaded — processing started', 'success');
+    closeModal();
+    renderContent();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
 async function editContent(id) {
   const c = await GET(`/content/${id}`).catch(() => null);
   if (!c) return toast('Content not found', 'error');
@@ -587,6 +645,11 @@ async function editContent(id) {
     <div class="form-group"><label>Name</label><input id="cnt-edit-name" class="form-control" value="${escHtml(c.name)}" /></div>
     ${c.type === 'stream' ? `
     <div class="form-group"><label>URL</label><input id="cnt-edit-url" class="form-control" value="${escHtml(c.url || '')}" /></div>
+    ` : c.type === 'video' ? `
+    <p style="font-size:12px;color:var(--text-secondary)">
+      File: ${escHtml(c.file_path || '')}${c.url ? `<br>Stream URL: ${escHtml(c.url)}` : ''}<br>
+      Status: ${processingBadge(c.processing_status || 'ready')}
+    </p>
     ` : `<p style="font-size:12px;color:var(--text-secondary)">File: ${escHtml(c.file_path || '')}</p>`}
   `, `
     <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>

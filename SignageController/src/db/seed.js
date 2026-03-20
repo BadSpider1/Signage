@@ -1,5 +1,9 @@
 'use strict';
 
+// Load .env BEFORE importing anything else so env vars are available.
+// Precedence: existing process.env vars > .env file > defaults in config.js
+require('dotenv').config();
+
 // Seed script - run with: node src/db/seed.js
 // Sets up sample data for development
 

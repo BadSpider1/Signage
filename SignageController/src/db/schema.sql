@@ -21,13 +21,16 @@ CREATE TABLE IF NOT EXISTS device_groups (
   PRIMARY KEY (device_id, group_id)
 );
 
+-- type can be: stream, image, video
+-- processing_status is used for video uploads: queued | processing | ready | failed
 CREATE TABLE IF NOT EXISTS content (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('stream','image')),
+  type TEXT NOT NULL,
   url TEXT,
   file_path TEXT,
   metadata TEXT DEFAULT '{}',
+  processing_status TEXT NOT NULL DEFAULT 'ready',
   created_at INTEGER NOT NULL
 );
 

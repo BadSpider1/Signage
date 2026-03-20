@@ -1,5 +1,9 @@
 'use strict';
 
+// Load .env BEFORE any config/module imports so env vars are available.
+// Precedence: existing process.env vars > .env file > defaults in config.js
+require('dotenv').config();
+
 const http = require('http');
 const path = require('path');
 const express = require('express');
@@ -22,8 +26,12 @@ const uploadsLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Serve uploaded files
-app.use('/uploads', uploadsLimiter, express.static(path.resolve(config.uploadDir)));
+// Serve uploaded files with cache headers
+app.use('/uploads', uploadsLimiter, (req, res, next) => {
+  // Allow Pi devices to cache media files for up to 5 minutes
+  res.set('Cache-Control', 'public, max-age=300');
+  next();
+}, express.static(path.resolve(config.uploadDir)));
 
 // Serve static admin UI
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -42,15 +50,19 @@ const server = http.createServer(app);
 const gateway = require('./gateway/deviceGateway');
 gateway.init(server);
 
-// Heartbeat checker — mark devices offline if they haven't pinged recently
+// Heartbeat checker — mark devices offline if they haven't pinged within the timeout.
+// Only acts on devices currently marked online; the gateway handles the online->offline
+// transition for devices that send no heartbeats at all.
 const deviceService = require('./services/deviceService');
 setInterval(() => {
   const cutoff = Date.now() - config.heartbeatTimeoutMs;
   const devices = deviceService.getAllDevices();
   for (const device of devices) {
     if (device.online && (device.last_heartbeat === null || device.last_heartbeat < cutoff)) {
-      console.log(`[Heartbeat] Marking device offline: ${device.id}`);
-      deviceService.setDeviceOnline(device.id, false, 'fallback');
+      console.log(`[Heartbeat] Marking device offline (no heartbeat): ${device.id} (last: ${device.last_heartbeat})`);
+      // Use a dedicated query that does NOT update last_heartbeat so the timestamp
+      // reflects when the device was actually last seen.
+      deviceService.markOffline(device.id);
     }
   }
 }, 15000);
