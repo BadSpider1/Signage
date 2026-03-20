@@ -43,6 +43,14 @@ function setDeviceOnline(id, online, state) {
     .run(online ? 1 : 0, state || 'fallback', Date.now(), id);
 }
 
+/**
+ * Mark a device offline WITHOUT updating last_heartbeat, so the UI continues to show
+ * the real timestamp of the last successful heartbeat.
+ */
+function markOffline(id) {
+  db.prepare(`UPDATE devices SET online = 0, current_state = 'fallback' WHERE id = ?`).run(id);
+}
+
 function updateHeartbeat(id) {
   db.prepare(`UPDATE devices SET last_heartbeat = ? WHERE id = ?`).run(Date.now(), id);
 }
@@ -72,6 +80,7 @@ module.exports = {
   getDevice,
   createOrUpdateDevice,
   setDeviceOnline,
+  markOffline,
   updateHeartbeat,
   renameDevice,
   addDeviceToGroup,

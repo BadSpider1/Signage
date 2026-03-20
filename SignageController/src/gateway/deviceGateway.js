@@ -8,19 +8,36 @@ const resolver = require('../resolvers/assignmentResolver');
 // Map of deviceId -> WebSocket instance
 const connectedDevices = new Map();
 
-let wss;
+// Map of deviceId -> setTimeout handle for delayed offline marking.
+// Used to implement a grace period that absorbs fast reconnects.
+const offlineTimers = new Map();
 
+let wss;
+let pingTimer = null;
+
+/**
+ * Build the list of WS commands to push to a device given its resolved content.
+ * For image type, the path sent to the device is a full HTTP URL so the Pi client
+ * can fetch it directly from the controller.
+ */
 function buildCommand(resolved) {
   if (!resolved) {
     return [{ type: 'CLEAR_STREAM' }];
   }
   const { content } = resolved;
-  if (content.type === 'stream') {
+  if (content.type === 'stream' || content.type === 'video') {
+    // For video, the url points to the hosted HLS or MP4 file.
     return [{ type: 'SET_STREAM_URL', url: content.url }];
   }
   if (content.type === 'image') {
+    // Build an absolute URL the Pi client can fetch over HTTP.
+    let mediaUrl = content.url;
+    if (!mediaUrl && content.file_path) {
+      // file_path is a root-relative path like /uploads/filename
+      mediaUrl = `${config.baseUrl}${content.file_path}`;
+    }
     return [
-      { type: 'SET_FALLBACK_IMAGE', path: content.file_path || content.url },
+      { type: 'SET_FALLBACK_IMAGE', path: mediaUrl },
       { type: 'CLEAR_STREAM' },
     ];
   }
@@ -61,6 +78,18 @@ function getConnectedDevices() {
   return Array.from(connectedDevices.keys());
 }
 
+/**
+ * Cancel any pending offline timer for a device (e.g., when it reconnects
+ * within the grace period before we've actually marked it offline).
+ */
+function cancelOfflineTimer(deviceId) {
+  const timer = offlineTimers.get(deviceId);
+  if (timer) {
+    clearTimeout(timer);
+    offlineTimers.delete(deviceId);
+  }
+}
+
 function handleIdentify(ws, msg) {
   const { deviceId, capabilities, version, token } = msg;
 
@@ -76,6 +105,9 @@ function handleIdentify(ws, msg) {
     ws.close();
     return;
   }
+
+  // Cancel any pending offline timer — the device reconnected in time.
+  cancelOfflineTimer(deviceId);
 
   // Auto-register / update device
   const name = msg.name || deviceId;
@@ -97,7 +129,9 @@ function handleIdentify(ws, msg) {
 
   // Update device state
   if (resolved) {
-    const state = resolved.content.type === 'stream' ? 'stream' : 'fallback';
+    const state = (resolved.content.type === 'stream' || resolved.content.type === 'video')
+      ? 'stream'
+      : 'fallback';
     deviceService.setDeviceState(deviceId, state, resolved.content.id);
   } else {
     deviceService.setDeviceState(deviceId, 'fallback', null);
@@ -136,6 +170,30 @@ function updateHeartbeatForSocket(ws) {
   }
 }
 
+/**
+ * Start periodic server-initiated PING messages to all connected devices.
+ * Devices respond with a PONG message that updates their heartbeat timestamp.
+ * This is in addition to the WS protocol-level ping/pong already handled by the ws library.
+ */
+function startPingScheduler() {
+  if (pingTimer) clearInterval(pingTimer);
+  if (!config.pingIntervalMs || config.pingIntervalMs <= 0) return;
+
+  pingTimer = setInterval(() => {
+    for (const [deviceId, ws] of connectedDevices.entries()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: 'PING' }));
+          // Also send a WS-level ping frame as a belt-and-suspenders heartbeat
+          ws.ping();
+        } catch (err) {
+          console.error(`[Gateway] Error pinging device ${deviceId}:`, err.message);
+        }
+      }
+    }
+  }, config.pingIntervalMs);
+}
+
 function init(server) {
   wss = new WebSocket.Server({ server });
 
@@ -143,6 +201,7 @@ function init(server) {
     console.log(`[Gateway] New WS connection from ${req.socket.remoteAddress}`);
 
     ws.on('pong', () => {
+      // WS protocol-level pong — update heartbeat
       updateHeartbeatForSocket(ws);
     });
 
@@ -152,9 +211,24 @@ function init(server) {
 
     ws.on('close', () => {
       if (ws._deviceId) {
-        console.log(`[Gateway] Device disconnected: ${ws._deviceId}`);
-        connectedDevices.delete(ws._deviceId);
-        deviceService.setDeviceOnline(ws._deviceId, false, 'fallback');
+        const deviceId = ws._deviceId;
+        console.log(`[Gateway] Device disconnected: ${deviceId}`);
+        connectedDevices.delete(deviceId);
+
+        // Use a grace period before marking offline to absorb fast reconnects.
+        // If the device reconnects within offlineGraceMs, cancelOfflineTimer is called
+        // in handleIdentify and the device won't be briefly marked offline.
+        const timer = setTimeout(() => {
+          offlineTimers.delete(deviceId);
+          // Only mark offline if the device hasn't reconnected (not in connectedDevices).
+          if (!connectedDevices.has(deviceId)) {
+            console.log(`[Gateway] Marking device offline after grace period: ${deviceId}`);
+            // Use markOffline() so last_heartbeat is preserved (shows real last-seen time).
+            deviceService.markOffline(deviceId);
+          }
+        }, config.offlineGraceMs);
+
+        offlineTimers.set(deviceId, timer);
       }
     });
 
@@ -162,6 +236,8 @@ function init(server) {
       console.error(`[Gateway] WS error for device ${ws._deviceId || 'unknown'}:`, err.message);
     });
   });
+
+  startPingScheduler();
 
   console.log('[Gateway] WebSocket server initialized');
 }
